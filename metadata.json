@@ -1,0 +1,6 @@
+{
+  "name": "DocMind AI",
+  "description": "Premium AI Research Assistant with RAG, document analysis, study tools, and contradiction detection",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
