@@ -39,19 +39,70 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Read text from file
+    // Read text from file using proper parsers
     let text = "";
     try {
       const buffer = await file.arrayBuffer();
-      // For text files, decode utf-8; for others, extract printable strings or buffer text
-      const dec = new TextDecoder("utf-8", { fatal: false });
-      const rawText = dec.decode(buffer);
-      text = rawText.replace(/[^\x20-\x7E\t\n\r]/g, " ").replace(/\s+/g, " ").trim();
-      if (!text || text.length < 20) {
-        text = `Extracted document content from ${filename}. Comprehensive research content analyzing foundational concepts, methodologies, empirical findings, and evaluation metrics across related literature.`;
+      const nodeBuffer = Buffer.from(buffer);
+
+      if (ext === ".pdf") {
+        try {
+          const { extractText } = await import("unpdf");
+          const uint8 = new Uint8Array(buffer);
+          const { text: extractedPages } = await extractText(uint8);
+          const mergedText = Array.isArray(extractedPages)
+            ? extractedPages.join("\n\n")
+            : (extractedPages || "");
+
+          const cleaned = mergedText
+            .replace(/\r\n/g, "\n")
+            .replace(/[^\S\r\n]+/g, " ")
+            .trim();
+
+          if (cleaned.length >= 20) {
+            text = cleaned;
+          } else {
+            text = `[Document: ${filename}]\nNote: This PDF document contains primarily scanned images, diagrams, or non-selectable visual pages without an embedded digital text layer. No readable text characters could be extracted. Please ensure the PDF has an OCR text layer enabled to query its detailed contents.`;
+          }
+        } catch (pdfErr: any) {
+          console.error("PDF parsing error:", pdfErr);
+          text = `[Document: ${filename}]\nUnable to extract text layer from PDF: ${pdfErr?.message || "format error"}.`;
+        }
+      } else if (ext === ".docx") {
+        try {
+          const mammoth = await import("mammoth");
+          const result = await mammoth.extractRawText({ buffer: nodeBuffer });
+          text = result.value.trim();
+          if (!text) {
+            text = `[Document: ${filename}]\nNote: This Word document appears to be empty or contains only non-text media.`;
+          }
+        } catch (docxErr: any) {
+          console.error("DOCX parsing error:", docxErr);
+          text = `[Document: ${filename}]\nUnable to extract text from DOCX file.`;
+        }
+      } else if (ext === ".txt") {
+        const dec = new TextDecoder("utf-8", { fatal: false });
+        text = dec.decode(buffer).trim();
       }
-    } catch {
-      text = `Processed content for uploaded document: ${filename}. Contains structured knowledge sections for retrieval and analysis.`;
+
+      // Safety check: ensure no raw PDF binary stream artifacts leak into RAG
+      if (text.includes("%PDF-") || text.includes("/Type /Page") || text.includes("/Font <<") || text.includes("/MediaBox")) {
+        text = text
+          .replace(/%PDF-[\s\S]*?endobj/g, "")
+          .replace(/<<[\s\S]*?>>/g, "")
+          .replace(/stream[\s\S]*?endstream/g, "")
+          .trim();
+        if (!text || text.length < 20) {
+          text = `[Document: ${filename}]\nThis PDF is a binary/scanned document without an accessible text layer.`;
+        }
+      }
+    } catch (err: any) {
+      console.error("Document read error:", err);
+      text = `[Document: ${filename}]\nError reading document content.`;
+    }
+
+    if (!text || text.trim().length === 0) {
+      text = `[Document: ${filename}]\nNo readable text could be extracted from this file.`;
     }
 
     const newDoc = store.addDocument(filename, ext, text);

@@ -3,9 +3,11 @@ import { store, getGemini } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, session_id, history = [], document_id } = await req.json();
+    const body = await req.json();
+    const query = (body.query || (Array.isArray(body.messages) ? body.messages[body.messages.length - 1]?.content : "")) as string;
+    const { session_id, history = [], document_id } = body;
 
-    if (!query || typeof query !== "string") {
+    if (!query || typeof query !== "string" || !query.trim()) {
       return new Response("Query required", { status: 400 });
     }
 
