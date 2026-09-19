@@ -143,9 +143,9 @@ export default function DashboardOverview() {
                 <Sparkles size={20} />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">NLI Contradiction Engine Status: Operational</h4>
+                <h4 className="text-sm font-bold text-white">Grounded Retrieval Engine: Active</h4>
                 <p className="text-xs text-slate-400">
-                  Model: <span className="font-mono text-cyan-300">cross-encoder/nli-deberta-v3-small</span> &bull; Vector Engine: <span className="font-mono text-purple-300">ChromaDB HNSW</span>
+                  Storage: <span className="font-mono text-cyan-300">In-Memory Corpus Store</span> &bull; Citations: <span className="font-mono text-purple-300">Contextual Attribution</span>
                 </p>
               </div>
             </div>

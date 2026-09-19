@@ -209,17 +209,14 @@ export default function ChatInterface() {
     setInput("");
     setIsLoading(true);
 
-    // Simulated research telemetry phases
-    setPipelineState("SEARCHING VECTOR INDEX (HNSW)...");
+    // Research telemetry phases
+    setPipelineState("SEARCHING LOCAL DOCUMENT CORPUS...");
     setTimeout(() => {
-      setPipelineState("RETRIEVING TOP-k CHUNKS (k=4)...");
+      setPipelineState("RETRIEVING RELEVANT PASSAGES...");
     }, 400);
     setTimeout(() => {
-      setPipelineState("PAIRWISE NLI CONTRADICTION ARBITRATION...");
-    }, 850);
-    setTimeout(() => {
-      setPipelineState("LOCAL LLM SYNTHESIS...");
-    }, 1300);
+      setPipelineState("SYNTHESIZING GROUNDED ANSWER...");
+    }, 950);
 
     await streamChat(userMessage.content, history, sessionId, {
       onMeta: (meta) => {
@@ -304,12 +301,12 @@ export default function ChatInterface() {
           <span className="text-slate-600">|</span>
           <div className="flex items-center gap-1.5 text-purple-400 hidden sm:flex">
             <Database className="w-3.5 h-3.5" />
-            <span>CHROMADB HNSW</span>
+            <span>LOCAL CORPUS</span>
           </div>
           <span className="text-slate-600 hidden sm:inline">|</span>
           <div className="flex items-center gap-1.5 text-emerald-400 hidden md:flex">
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>NLI CONFLICT ARBITER: READY</span>
+            <span>VERIFIED CITATIONS</span>
           </div>
         </div>
 

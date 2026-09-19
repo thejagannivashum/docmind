@@ -361,16 +361,21 @@ export default function VectorSpaceScene() {
             3D DENSE VECTOR SPACE
           </div>
           <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-            Semantic Retrieval &amp; Cosine Projection
+            Semantic Retrieval &amp; Geometric Projection
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            See how DocMind projects user queries into high-dimensional vector space, illuminating relevant knowledge clusters while dimming noise.
+            Visual representation of how high-dimensional document chunks cluster by topic and illuminate relative to user queries.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-2 rounded-xl">
-          <Info className="w-4 h-4 text-cyan-400" />
-          <span>DRAG MOUSE OVER CANVAS TO ROTATE VIEW</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs font-mono text-slate-400">
+          <span className="px-2.5 py-1 rounded-lg border border-purple-500/30 bg-purple-950/40 text-purple-300">
+            VISUAL SIMULATION
+          </span>
+          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 px-3 py-1 rounded-xl">
+            <Info className="w-3.5 h-3.5 text-cyan-400" />
+            <span>DRAG TO ORBIT</span>
+          </div>
         </div>
       </div>
 

@@ -106,26 +106,26 @@ export default function PrivacyArchitecture() {
                 {[
                   {
                     title: "1. Local Storage",
-                    desc: "Confidential PDFs and docs parsed in-memory with SHA-256 integrity.",
-                    tech: "On-Device RAM",
+                    desc: "Confidential PDFs and docs parsed in-memory without unencrypted disk leakage.",
+                    tech: "In-Memory Session Store",
                     icon: HardDrive,
                   },
                   {
-                    title: "2. Local Embeddings",
-                    desc: "Sentence-transformers run directly via CPU/GPU quantization.",
-                    tech: "all-MiniLM-L6-v2",
+                    title: "2. Text Chunking",
+                    desc: "Documents segmented with sliding window overlap locally inside the node.",
+                    tech: "Sliding Window Chunks",
                     icon: Zap,
                   },
                   {
-                    title: "3. Local Vector Index",
-                    desc: "HNSW approximate nearest neighbor index stored on local disk.",
-                    tech: "ChromaDB / SQLite",
+                    title: "3. Semantic Matching",
+                    desc: "Term-frequency & contextual retrieval executed inside the host runtime.",
+                    tech: "Local Corpus Index",
                     icon: Database,
                   },
                   {
-                    title: "4. Local Inference",
-                    desc: "Llama 3 runs offline with pairwise NLI contradiction scoring.",
-                    tech: "DeBERTa + Ollama",
+                    title: "4. Grounded Synthesis",
+                    desc: "Offline deterministic synthesis fallback or optional Gemini API generation.",
+                    tech: "Local Fallback / Gemini",
                     icon: Cpu,
                   },
                 ].map((node, i) => {
