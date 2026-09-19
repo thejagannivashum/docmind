@@ -422,7 +422,10 @@ export default function VectorSpaceScene() {
       </div>
 
       {/* 3D WebGL Canvas Container */}
-      <div className="relative w-full h-[460px] rounded-2xl border border-slate-800/80 bg-slate-950/90 overflow-hidden mb-6">
+      <div
+        data-threescene="true"
+        className="canvas-3d-container relative w-full h-[460px] rounded-2xl border border-slate-800/80 bg-slate-950/90 overflow-hidden mb-6"
+      >
         <div ref={containerRef} className="absolute inset-0 z-0 cursor-grab active:cursor-grabbing" />
 
         {/* Legend Overlay */}

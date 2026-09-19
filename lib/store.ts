@@ -12,6 +12,7 @@ export interface StoredChunk {
   documentId: number;
   documentTitle: string;
   text: string;
+  chunkIndex: number;
 }
 
 export interface StoredDocument {
@@ -35,7 +36,13 @@ export interface StoredChatMessage {
   content: string;
   confidence?: number;
   conflictDetected?: boolean;
-  sources?: { text: string; source: string; similarity: number }[];
+  sources?: {
+    id?: string;
+    document_id?: number;
+    source: string;
+    text: string;
+    similarity: number;
+  }[];
   timestamp: string;
 }
 
@@ -43,6 +50,7 @@ export interface StoredSession {
   id: number;
   userId: number;
   title: string;
+  documentId?: number | null;
   createdAt: string;
 }
 
@@ -70,7 +78,7 @@ class MemoryStore {
       isActive: true,
     });
 
-    // Sample documents for instant utility
+    // Sample documents
     const doc1Content = `Attention Is All You Need. The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.`;
 
     const doc2Content = `Deep Learning Best Practices for Document Retrieval and RAG. Retrieval-Augmented Generation (RAG) optimizes the output of large language models by referencing an authoritative knowledge base outside of training data sources. Key steps include document ingestion, chunking with sliding window overlap, dense vector embedding generation, top-k vector similarity retrieval using cosine distance, and conflict arbitration. Contradiction detection assesses whether retrieved evidence passages make mutually incompatible factual statements, using natural language inference (NLI) cross-encoders to score premise-hypothesis pairs before final generation.`;
@@ -87,6 +95,7 @@ class MemoryStore {
       id: sessId,
       userId: 1,
       title: "Transformer architecture questions",
+      documentId: 1,
       createdAt: new Date(Date.now() - 3600000).toISOString(),
     });
 
@@ -107,6 +116,8 @@ class MemoryStore {
       conflictDetected: false,
       sources: [
         {
+          id: "1_chunk_0",
+          document_id: 1,
           source: "Transformer_Architecture_Whitepaper.pdf",
           text: "Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.",
           similarity: 0.94,
@@ -118,16 +129,21 @@ class MemoryStore {
 
   addDocument(title: string, file_type: string, content: string): StoredDocument {
     const id = this.nextDocId++;
-    const paragraphs = content
-      .split(/\n\n|\.\s+/)
+    
+    // Split content into meaningful chunks; ensure short documents are preserved
+    const rawParagraphs = content
+      .split(/\n\n+|\r\n\r\n+|\.\s+/)
       .map((p) => p.trim())
-      .filter((p) => p.length > 20);
+      .filter((p) => p.length > 5);
+
+    const paragraphs = rawParagraphs.length > 0 ? rawParagraphs : [content.trim()];
 
     const chunks: StoredChunk[] = paragraphs.map((text, idx) => ({
       id: `${id}_chunk_${idx}`,
       documentId: id,
       documentTitle: title,
       text,
+      chunkIndex: idx,
     }));
 
     const doc: StoredDocument = {
@@ -157,28 +173,90 @@ class MemoryStore {
     return false;
   }
 
-  findChunks(query: string, limit = 4): { text: string; source: string; similarity: number }[] {
-    const queryTerms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
-    const scored: { text: string; source: string; similarity: number }[] = [];
+  findChunks(
+    query: string,
+    limit = 4,
+    documentId?: number | null,
+    collectionId?: number | null
+  ): { id: string; document_id: number; source: string; text: string; similarity: number }[] {
+    // 1. Filter candidates strictly based on documentId or collectionId
+    let targetDocs = this.documents;
+    if (documentId !== null && documentId !== undefined) {
+      targetDocs = this.documents.filter((d) => d.id === documentId);
+    } else if (collectionId !== null && collectionId !== undefined) {
+      targetDocs = this.documents.filter((d) => d.collection_id === collectionId);
+    }
 
-    for (const doc of this.documents) {
+    if (targetDocs.length === 0) {
+      return [];
+    }
+
+    const queryTerms = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 1);
+
+    const scored: {
+      id: string;
+      document_id: number;
+      source: string;
+      text: string;
+      similarity: number;
+    }[] = [];
+
+    for (const doc of targetDocs) {
       for (const chunk of doc.chunks) {
         const textLower = chunk.text.toLowerCase();
         let matchCount = 0;
-        for (const term of queryTerms) {
-          if (textLower.includes(term)) matchCount++;
+        let exactPhraseBonus = 0;
+
+        if (query.length > 3 && textLower.includes(query.toLowerCase().trim())) {
+          exactPhraseBonus = 0.3;
         }
-        const similarity = queryTerms.length > 0 ? Math.min(0.98, Math.max(0.65, (matchCount / queryTerms.length) * 0.4 + 0.58)) : 0.7;
+
+        for (const term of queryTerms) {
+          if (textLower.includes(term)) {
+            matchCount++;
+          }
+        }
+
+        let similarity = 0.65;
+        if (queryTerms.length > 0) {
+          const ratio = matchCount / queryTerms.length;
+          similarity = Math.min(0.98, Math.max(0.65, ratio * 0.45 + exactPhraseBonus + 0.5));
+        }
+
         scored.push({
-          text: chunk.text,
+          id: chunk.id,
+          document_id: doc.id,
           source: doc.title,
+          text: chunk.text,
           similarity: Math.round(similarity * 100) / 100,
         });
       }
     }
 
+    // Sort descending by calculated relevance
     scored.sort((a, b) => b.similarity - a.similarity);
-    return scored.slice(0, limit);
+
+    // If matches found, return top results
+    if (scored.length > 0) {
+      return scored.slice(0, limit);
+    }
+
+    // Fallback: If a specific document was targeted, return its first available chunks
+    if (targetDocs.length === 1 && targetDocs[0].chunks.length > 0) {
+      return targetDocs[0].chunks.slice(0, limit).map((c) => ({
+        id: c.id,
+        document_id: targetDocs[0].id,
+        source: targetDocs[0].title,
+        text: c.text,
+        similarity: 0.85,
+      }));
+    }
+
+    return [];
   }
 
   getAnalytics() {

@@ -843,7 +843,10 @@ export default function HeroScene({ onExploreClick }: HeroSceneProps) {
   }, [isRotating]);
 
   return (
-    <div className="relative w-full h-[680px] md:h-[760px] overflow-hidden select-none bg-gradient-to-b from-[#050814]/40 via-[#050814]/90 to-[#050814]">
+    <div
+      data-threescene="true"
+      className="canvas-3d-container relative w-full h-[680px] md:h-[760px] overflow-hidden select-none bg-gradient-to-b from-[#050814]/40 via-[#050814]/90 to-[#050814]"
+    >
       {/* 3D WebGL Canvas Viewport */}
       <div ref={containerRef} className="absolute inset-0 z-0 cursor-grab active:cursor-grabbing" />
 

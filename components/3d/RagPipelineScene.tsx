@@ -698,7 +698,10 @@ export default function RagPipelineScene() {
       </div>
 
       {/* 3D WebGL Stage Container */}
-      <div className="relative w-full h-[480px] md:h-[540px] rounded-2xl overflow-hidden border border-slate-800/80 bg-[#030611] select-none">
+      <div
+        data-threescene="true"
+        className="canvas-3d-container relative w-full h-[480px] md:h-[540px] rounded-2xl overflow-hidden border border-slate-800/80 bg-[#030611] select-none"
+      >
         {/* Three.js Canvas Element */}
         <div ref={containerRef} className="absolute inset-0 z-0 cursor-grab active:cursor-grabbing" />
 

@@ -29,12 +29,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   } catch (err) {
-    // Same root cause as the chat stream: fetch() throws directly (not a
-    // rejected HTTP response) when the backend is unreachable. Every caller
-    // of request() goes through this one place, so catching it here means
-    // no page-level try/catch can be forgotten and leave an unhandled
-    // rejection on the table.
-    throw new ApiError(0, `Can't reach the DocMind AI backend at ${API_BASE}. Is it running?`);
+    throw new ApiError(0, `Can't reach the DocMind AI backend. Is it running?`);
   }
 
   if (!res.ok) {
@@ -62,16 +57,23 @@ export async function register(email: string, password: string) {
 }
 
 export async function login(email: string, password: string) {
-  const form = new URLSearchParams();
-  form.set("username", email);
-  form.set("password", password);
-  const data = await request<{ access_token: string }>("/api/auth/login", {
+  const res = await request<{ access_token: string }>("/api/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
-  setToken(data.access_token);
-  return data;
+  setToken(res.access_token);
+  return res;
+}
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  is_active: boolean;
+}
+
+export async function getMe(): Promise<UserProfile> {
+  return request<UserProfile>("/api/auth/me");
 }
 
 // ---- Documents ----
@@ -101,26 +103,16 @@ export interface UploadResult {
 export async function uploadDocument(file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file);
-  return request<UploadResult>(
-    "/api/documents/upload",
-    { method: "POST", body: form }
-  );
+  return request<UploadResult>("/api/documents/upload", {
+    method: "POST",
+    body: form,
+  });
 }
 
-export async function deleteDocument(id: number) {
-  return request<void>(`/api/documents/${id}`, { method: "DELETE" });
-}
-
-// ---- Profile ----
-
-export interface UserProfile {
-  id: number;
-  email: string;
-  is_active: boolean;
-}
-
-export async function getMe(): Promise<UserProfile> {
-  return request<UserProfile>("/api/auth/me");
+export async function deleteDocument(id: number): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/api/documents/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // ---- Analytics ----
@@ -140,42 +132,85 @@ export async function getAnalytics(): Promise<AnalyticsOverview> {
   return request<AnalyticsOverview>("/api/analytics/overview");
 }
 
-// ---- Study tools ----
-
-export async function generateSummary(documentId: number) {
-  return request<{ summary: string }>(`/api/study/${documentId}/summary`, { method: "POST" });
-}
-
-export async function generateQuiz(documentId: number) {
-  return request<{ questions: { question: string; options: string[]; correct_index: number }[] }>(
-    `/api/study/${documentId}/quiz`,
-    { method: "POST" }
-  );
-}
-
-export async function generateFlashcards(documentId: number) {
-  return request<{ flashcards: { front: string; back: string }[] }>(
-    `/api/study/${documentId}/flashcards`,
-    { method: "POST" }
-  );
-}
-
-// ---- Backend health ----
+// ---- Health ----
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${API_BASE}/api/health`, {
+      method: "GET",
+      cache: "no-store",
+    });
     return res.ok;
   } catch {
     return false;
   }
 }
 
-// ---- Chat (SSE streaming) ----
+// ---- Study Tools ----
+
+export async function generateSummary(documentId: number): Promise<{ summary: string }> {
+  return request<{ summary: string }>(`/api/study/${documentId}/summary`, {
+    method: "POST",
+  });
+}
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correct_index: number;
+}
+
+export async function generateQuiz(documentId: number): Promise<{ questions: QuizQuestion[] }> {
+  return request<{ questions: QuizQuestion[] }>(`/api/study/${documentId}/quiz`, {
+    method: "POST",
+  });
+}
+
+export interface Flashcard {
+  front: string;
+  back: string;
+}
+
+export async function generateFlashcards(documentId: number): Promise<{ flashcards: Flashcard[] }> {
+  return request<{ flashcards: Flashcard[] }>(`/api/study/${documentId}/flashcards`, {
+    method: "POST",
+  });
+}
+
+// ---- Chat Sessions ----
+
+export interface ChatSession {
+  id: number;
+  title: string;
+  created_at: string;
+  document_id?: number | null;
+}
+
+export async function listSessions(): Promise<ChatSession[]> {
+  return request<ChatSession[]>("/api/chat/sessions");
+}
+
+export interface ChatMessageRecord {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  confidence: number | null;
+  conflict_detected: boolean;
+  sources: SourceRef[];
+  timestamp: string;
+}
+
+export async function getSessionMessages(sessionId: number): Promise<ChatMessageRecord[]> {
+  return request<ChatMessageRecord[]>(`/api/chat/sessions/${sessionId}/messages`);
+}
+
+// ---- Chat (SSE Streaming) ----
 
 export interface SourceRef {
-  text: string;
+  id?: string;
+  document_id?: number;
   source: string;
+  text: string;
   similarity: number;
 }
 
@@ -207,7 +242,8 @@ export async function streamChat(
   query: string,
   history: { role: string; content: string }[],
   sessionId: number | null,
-  handlers: ChatStreamHandlers
+  handlers: ChatStreamHandlers,
+  documentId?: number | null
 ) {
   const token = getToken();
   let res: Response;
@@ -218,16 +254,16 @@ export async function streamChat(
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ query, session_id: sessionId, history }),
+      body: JSON.stringify({
+        query,
+        session_id: sessionId,
+        history,
+        document_id: documentId,
+      }),
     });
   } catch (err) {
-    // fetch() itself throws (not a rejected response) when the backend is
-    // unreachable — wrong port, backend not running, CORS blocked, DNS
-    // failure, etc. This is the root cause of the previously-unhandled
-    // "TypeError: network error" — it must be caught here, not left to
-    // propagate as an unhandled promise rejection.
     handlers.onError(
-      "Can't reach the DocMind AI backend. Check that it's running at " + API_BASE + "."
+      "Can't reach the DocMind AI backend. Check that it's running."
     );
     return;
   }
@@ -250,25 +286,37 @@ export async function streamChat(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() || ""; // last (possibly incomplete) frame stays in the buffer
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
 
-      for (const frame of frames) {
-        const line = frame.trim();
-        if (!line.startsWith("data:")) continue;
-        const event = JSON.parse(line.slice(5).trim());
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const jsonStr = trimmed.replace(/^data:\s*/, "");
+        if (!jsonStr) continue;
 
-        if (event.type === "meta") handlers.onMeta(event as ChatMeta);
-        else if (event.type === "token") handlers.onToken(event.content);
-        else if (event.type === "done") handlers.onDone();
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.type === "meta") {
+            handlers.onMeta(parsed as ChatMeta);
+          } else if (parsed.type === "token") {
+            handlers.onToken(parsed.content);
+          } else if (parsed.type === "done") {
+            handlers.onDone();
+          } else if (parsed.type === "error") {
+            handlers.onError(parsed.error || "Stream error");
+          }
+        } catch {
+          // non-JSON frame, ignore
+        }
       }
     }
+    handlers.onDone();
   } catch (err) {
-    // The connection can also drop mid-stream (backend crash, network blip).
-    handlers.onError(err instanceof Error ? err.message : "Connection lost while streaming the response.");
+    handlers.onError(err instanceof Error ? err.message : "Stream read error");
   }
 }
