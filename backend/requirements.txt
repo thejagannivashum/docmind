@@ -1,0 +1,19 @@
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+pydantic==2.6.3
+python-multipart==0.0.9
+chromadb==0.4.24
+langchain-text-splitters==0.0.1
+sentence-transformers==2.5.1
+ollama==0.1.7
+pypdf==4.1.0
+python-docx==1.1.0
+SQLAlchemy==2.0.28
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+# bcrypt pinned below 4.1: passlib 1.7.4 reads bcrypt.__about__.__version__,
+# which bcrypt>=4.1 removed. Confirmed via runtime test — 4.1.2 throws a
+# "(trapped) error reading bcrypt version" warning on every hash/verify call.
+bcrypt==4.0.1
+python-dotenv==1.0.1
+numpy<2.0.0
